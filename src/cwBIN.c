@@ -276,6 +276,63 @@ void binarization(Rgb **arr, int H, int W, int threshold)
         }
     }
 }
+Rgb **shift(Rgb **arr, int H, int W, int step, char *axis)
+{
+    printf("%d__%s\n", step, axis);
+    Rgb **res = malloc(H * sizeof(Rgb *));
+    if (!res)
+    {
+        exit_err(ERR_FILE, "Ошибка: нет памяти");
+    }
+    int rs = row_size(W);
+    for (int y = 0; y < H; y++)
+    {
+        res[y] = malloc(rs);
+        if (!res[y])
+        {
+            for (int i = 0; i < y; i++)
+            {
+                free(res[i]);
+            }
+            free(res);
+            exit_err(ERR_FILE, "Ошибка: нет памяти");
+        }
+    }
+    if (strcmp(axis, "x") == 0)
+    {
+        puts("X");
+        for (int y = 0; y < H; y++)
+        {
+            for (int x = 0; x < W; x++)
+            {
+                res[H - y - 1][(x + step) % W] = arr[H - y - 1][x];
+            }
+        }
+    }
+    else if (strcmp(axis, "y") == 0)
+    {
+        puts("Y");
+        for (int y = 0; y < H; y++)
+        {
+            for (int x = 0; x < W; x++)
+            {
+                res[(H - y - 1 + step) % H][x] = arr[H - y - 1][x];
+            }
+        }
+    }
+    else if (strcmp(axis, "xy") == 0)
+    {
+        puts("XY");
+        for (int y = 0; y < H; y++)
+        {
+            for (int x = 0; x < W; x++)
+            {
+                res[(H - y - 1 + step) % H][(x + step) % W] = arr[H - y - 1][x];
+            }
+        }
+    }
+    return res;
+}
 
 void print_info(BitmapFileHeader *bmfh, BitmapInfoHeader *bmif)
 {
@@ -325,9 +382,12 @@ typedef struct
     int do_line;
     int do_inverse;
     int do_trim;
+    int do_shift;
     int do_bin;
-    int threshold;
     int do_info;
+    int threshold;
+    int step;
+    char *axis;
     int act_count;
     char *input;
     char *output;
@@ -359,6 +419,9 @@ static void parse_cli(int argc, char *argv[], AppState *st)
                                         {"help", no_argument, 0, 'h'},
                                         {"binarization", no_argument, 0, 'B'},
                                         {"threshold", required_argument, 0, 'T'},
+                                        {"shift", no_argument, 0, 'S'},
+                                        {"step", required_argument, 0, 'P'},
+                                        {"axis", required_argument, 0, 'X'},
                                         {0, 0, 0, 0}};
 
     st->thickness = 1;
@@ -374,6 +437,18 @@ static void parse_cli(int argc, char *argv[], AppState *st)
         case 'h':
             help();
             exit(0);
+        case 'S':
+            st->do_shift = 1;
+            st->act_count++;
+            break;
+        case 'P':
+            printf("%d\n", 1);
+            if (sscanf(optarg, "%d", &st->step) != 1)
+                exit_err(ERR_ARGS, "Ошибка: неверный формат --step");
+            break;
+        case 'X':
+            st->axis = optarg;
+            break;
         case 'B':
             st->do_bin = 1;
             st->act_count++;
@@ -524,7 +599,13 @@ int main(int argc, char *argv[])
         bmif.imageSize = rs * H;
         bmfh.filesize = sizeof(BitmapFileHeader) + sizeof(BitmapInfoHeader) + bmif.imageSize;
     }
-
+    else if (st.do_shift)
+    {
+        Rgb **new_arr = shift(arr, H, W, st.step, st.axis);
+        free_arr(arr, H);
+        arr = new_arr;
+        puts("OK");
+    }
     write_bmp(st.output, arr, H, W, bmfh, bmif);
     free_arr(arr, H);
     return 0;
